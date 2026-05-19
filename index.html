@@ -746,6 +746,9 @@
             render();
         }
 
+        // Expose functions to global scope
+        window.switchCategory = switchCategory;
+
         // Modal functions
         window.openModal = () => {
             document.getElementById('addCategoryModal').classList.add('active');
@@ -854,8 +857,12 @@
             return div.innerHTML;
         }
 
-        // Expose saveUserData globally for any updates
+        // Expose all functions to global scope for onclick handlers
         window.saveUserData = saveUserData;
+        window.toggleItem = toggleItem;
+        window.deleteItem = deleteItem;
+        window.addItem = addItem;
+        window.endDay = endDay;
     </script>
 </body>
 </html>
