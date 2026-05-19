@@ -47,6 +47,92 @@
             margin-bottom: 10px;
         }
 
+        /* Auth Section */
+        .auth-section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-width: 400px;
+            margin: 50px auto;
+        }
+
+        .auth-section h2 {
+            margin-bottom: 20px;
+            color: var(--text);
+        }
+
+        .auth-section p {
+            color: var(--text-light);
+            margin-bottom: 20px;
+        }
+
+        .google-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 24px;
+            background: white;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .google-btn:hover {
+            border-color: var(--primary);
+            background: var(--bg);
+        }
+
+        .google-btn img {
+            width: 20px;
+            height: 20px;
+        }
+
+        .user-info {
+            display: none;
+            align-items: center;
+            gap: 15px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 15px 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .user-info.active {
+            display: flex;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+        }
+
+        .user-name {
+            flex: 1;
+            font-weight: 500;
+        }
+
+        .logout-btn {
+            padding: 8px 16px;
+            background: var(--border);
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .logout-btn:hover {
+            background: var(--danger);
+            color: white;
+        }
+
         /* Tabs */
         .tabs-container {
             background: var(--card-bg);
@@ -355,6 +441,27 @@
             color: white;
         }
 
+        /* Loading State */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-light);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
         /* Responsive */
         @media (max-width: 600px) {
             .tabs {
@@ -378,21 +485,46 @@
             <h1>📝 My Todo Lists</h1>
         </header>
 
-        <div class="tabs-container">
-            <div class="tabs" id="tabs"></div>
+        <!-- Auth Section -->
+        <div id="authSection" class="auth-section">
+            <h2>Welcome!</h2>
+            <p>Sign in with Google to sync your todos across all devices</p>
+            <button class="google-btn" onclick="signInWithGoogle()">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+                Sign in with Google
+            </button>
         </div>
 
-        <div class="content">
-            <div class="add-item-form">
-                <input type="text" id="newItemInput" placeholder="Add a new task..." />
-                <button onclick="addItem()">Add Task</button>
+        <!-- User Info -->
+        <div id="userInfo" class="user-info">
+            <img id="userAvatar" class="user-avatar" src="" alt="Avatar">
+            <span id="userName" class="user-name"></span>
+            <button class="logout-btn" onclick="signOut()">Sign Out</button>
+        </div>
+
+        <!-- App Content (hidden until signed in) -->
+        <div id="appContent" style="display: none;">
+            <div class="tabs-container">
+                <div class="tabs" id="tabs"></div>
             </div>
 
-            <ul class="todo-list" id="todoList"></ul>
+            <div class="content">
+                <div class="add-item-form">
+                    <input type="text" id="newItemInput" placeholder="Add a new task..." />
+                    <button onclick="addItem()">Add Task</button>
+                </div>
 
-            <div class="end-day-section">
-                <button class="end-day-btn" onclick="endDay()">🌙 End Day - Remove Completed</button>
-                <p class="completed-count" id="completedCount"></p>
+                <div class="loading" id="loadingState" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    <p>Syncing your todos...</p>
+                </div>
+
+                <ul class="todo-list" id="todoList"></ul>
+
+                <div class="end-day-section">
+                    <button class="end-day-btn" onclick="endDay()">🌙 End Day - Remove Completed</button>
+                    <p class="completed-count" id="completedCount"></p>
+                </div>
             </div>
         </div>
     </div>
@@ -409,9 +541,34 @@
         </div>
     </div>
 
-    <script>
-        // Data structure
-        let data = {
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, arrayUnion, arrayRemove } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // ============================================
+        // Firebase Configuration
+        // ============================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyDtfuAhRO_k83Z1VAsfq6jJVydIg6TbJ2o",
+            authDomain: "webtodo-813c2.firebaseapp.com",
+            projectId: "webtodo-813c2",
+            storageBucket: "webtodo-813c2.firebasestorage.app",
+            messagingSenderId: "438536918685",
+            appId: "1:438536918685:web:edae29f682b1efb8aae674"
+        };
+        // ============================================
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const provider = new GoogleAuthProvider();
+
+        // State
+        let currentUser = null;
+        let userData = {
             categories: ['General', 'Work', 'Home'],
             currentCategory: 'General',
             todos: {
@@ -420,20 +577,101 @@
                 'Home': []
             }
         };
+        let unsubscribeSnapshot = null;
 
-        // Load from localStorage
-        function load() {
-            const saved = localStorage.getItem('todoAppData');
-            if (saved) {
-                data = JSON.parse(saved);
+        // Auth state observer
+        onAuthStateChanged(auth, async (user) => {
+            currentUser = user;
+            if (user) {
+                // User signed in
+                document.getElementById('authSection').style.display = 'none';
+                document.getElementById('userInfo').classList.add('active');
+                document.getElementById('appContent').style.display = 'block';
+                document.getElementById('userAvatar').src = user.photoURL;
+                document.getElementById('userName').textContent = user.displayName;
+
+                // Show loading
+                document.getElementById('loadingState').style.display = 'block';
+                document.getElementById('todoList').innerHTML = '';
+
+                // Load/sync user data from Firestore
+                await loadUserData();
+            } else {
+                // User signed out
+                document.getElementById('authSection').style.display = 'block';
+                document.getElementById('userInfo').classList.remove('active');
+                document.getElementById('appContent').style.display = 'none';
+                if (unsubscribeSnapshot) {
+                    unsubscribeSnapshot();
+                    unsubscribeSnapshot = null;
+                }
             }
-            render();
+        });
+
+        // Load user data from Firestore
+        async function loadUserData() {
+            try {
+                const userRef = doc(db, 'users', currentUser.uid);
+                
+                // Listen for real-time updates
+                unsubscribeSnapshot = onSnapshot(userRef, 
+                    (docSnap) => {
+                        if (docSnap.exists()) {
+                            userData = docSnap.data();
+                            // Ensure todos object has all categories
+                            userData.categories.forEach(cat => {
+                                if (!userData.todos[cat]) {
+                                    userData.todos[cat] = [];
+                                }
+                            });
+                        } else {
+                            // First time user - create document
+                            saveUserData();
+                        }
+                        document.getElementById('loadingState').style.display = 'none';
+                        render();
+                    },
+                    (error) => {
+                        console.error("Error loading data:", error);
+                        document.getElementById('loadingState').style.display = 'none';
+                        alert('Error loading todos. Please refresh the page.');
+                    }
+                );
+            } catch (error) {
+                console.error("Error:", error);
+                document.getElementById('loadingState').style.display = 'none';
+            }
         }
 
-        // Save to localStorage
-        function save() {
-            localStorage.setItem('todoAppData', JSON.stringify(data));
+        // Save user data to Firestore
+        async function saveUserData() {
+            if (!currentUser) return;
+            
+            try {
+                const userRef = doc(db, 'users', currentUser.uid);
+                await setDoc(userRef, userData, { merge: true });
+            } catch (error) {
+                console.error("Error saving data:", error);
+            }
         }
+
+        // Make functions global for HTML onclick handlers
+        window.signInWithGoogle = async () => {
+            try {
+                await signInWithPopup(auth, provider);
+            } catch (error) {
+                console.error("Sign in error:", error);
+                alert('Sign in failed: ' + error.message);
+            }
+        };
+
+        window.signOut = async () => {
+            try {
+                await signOut(auth);
+            } catch (error) {
+                console.error("Sign out error:", error);
+            }
+        };
 
         // Render everything
         function render() {
@@ -447,12 +685,12 @@
             const tabsContainer = document.getElementById('tabs');
             tabsContainer.innerHTML = '';
 
-            data.categories.forEach(cat => {
+            userData.categories.forEach(cat => {
                 const tab = document.createElement('button');
-                tab.className = `tab ${cat === data.currentCategory ? 'active' : ''}`;
+                tab.className = `tab ${cat === userData.currentCategory ? 'active' : ''}`;
                 tab.innerHTML = `
                     ${cat}
-                    ${data.categories.length > 1 ? '<button class="remove-tab" onclick="event.stopPropagation(); removeCategory(\'' + cat + '\')">×</button>' : ''}
+                    ${userData.categories.length > 1 ? '<button class="remove-tab" onclick="event.stopPropagation(); removeCategory(\'' + cat + '\')">×</button>' : ''}
                 `;
                 tab.onclick = () => switchCategory(cat);
                 tabsContainer.appendChild(tab);
@@ -468,7 +706,7 @@
         // Render todos for current category
         function renderTodos() {
             const list = document.getElementById('todoList');
-            const todos = data.todos[data.currentCategory] || [];
+            const todos = userData.todos[userData.currentCategory] || [];
 
             if (todos.length === 0) {
                 list.innerHTML = '<div class="empty-state"><p>No tasks yet. Add one above!</p></div>';
@@ -495,106 +733,106 @@
 
         // Update completed count
         function updateCompletedCount() {
-            const todos = data.todos[data.currentCategory] || [];
+            const todos = userData.todos[userData.currentCategory] || [];
             const completed = todos.filter(t => t.completed).length;
             document.getElementById('completedCount').textContent = 
                 `${completed} of ${todos.length} tasks completed`;
         }
 
         // Switch category
-        function switchCategory(cat) {
-            data.currentCategory = cat;
-            save();
+        async function switchCategory(cat) {
+            userData.currentCategory = cat;
+            await saveUserData();
             render();
         }
 
-        // Add category
-        function openModal() {
+        // Modal functions
+        window.openModal = () => {
             document.getElementById('addCategoryModal').classList.add('active');
             document.getElementById('newCategoryInput').focus();
-        }
+        };
 
-        function closeModal() {
+        window.closeModal = () => {
             document.getElementById('addCategoryModal').classList.remove('active');
             document.getElementById('newCategoryInput').value = '';
-        }
+        };
 
-        function confirmAddCategory() {
+        window.confirmAddCategory = async () => {
             const name = document.getElementById('newCategoryInput').value.trim();
-            if (name && !data.categories.includes(name)) {
-                data.categories.push(name);
-                data.todos[name] = [];
-                data.currentCategory = name;
-                save();
+            if (name && !userData.categories.includes(name)) {
+                userData.categories.push(name);
+                userData.todos[name] = [];
+                userData.currentCategory = name;
+                await saveUserData();
                 render();
             }
             closeModal();
-        }
+        };
 
         // Remove category
-        function removeCategory(cat) {
-            if (data.categories.length <= 1) {
+        window.removeCategory = async (cat) => {
+            if (userData.categories.length <= 1) {
                 alert('You need at least one category!');
                 return;
             }
             if (confirm(`Remove "${cat}" and all its tasks?`)) {
-                const index = data.categories.indexOf(cat);
-                data.categories.splice(index, 1);
-                delete data.todos[cat];
-                data.currentCategory = data.categories[Math.max(0, index - 1)];
-                save();
+                const index = userData.categories.indexOf(cat);
+                userData.categories.splice(index, 1);
+                delete userData.todos[cat];
+                userData.currentCategory = userData.categories[Math.max(0, index - 1)];
+                await saveUserData();
                 render();
             }
-        }
+        };
 
         // Add todo item
-        function addItem() {
+        async function addItem() {
             const input = document.getElementById('newItemInput');
             const text = input.value.trim();
             if (!text) return;
 
-            if (!data.todos[data.currentCategory]) {
-                data.todos[data.currentCategory] = [];
+            if (!userData.todos[userData.currentCategory]) {
+                userData.todos[userData.currentCategory] = [];
             }
 
-            data.todos[data.currentCategory].push({
+            userData.todos[userData.currentCategory].push({
                 text: text,
                 completed: false,
                 createdAt: Date.now()
             });
 
             input.value = '';
-            save();
+            await saveUserData();
             render();
         }
 
         // Enter key to add
-        document.getElementById('newItemInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') addItem();
+        document.getElementById('newItemInput').addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter') await addItem();
         });
 
-        document.getElementById('newCategoryInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') confirmAddCategory();
+        document.getElementById('newCategoryInput').addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter') await confirmAddCategory();
         });
 
         // Toggle item
-        function toggleItem(index) {
-            data.todos[data.currentCategory][index].completed = 
-                !data.todos[data.currentCategory][index].completed;
-            save();
+        async function toggleItem(index) {
+            userData.todos[userData.currentCategory][index].completed = 
+                !userData.todos[userData.currentCategory][index].completed;
+            await saveUserData();
             render();
         }
 
         // Delete item
-        function deleteItem(index) {
-            data.todos[data.currentCategory].splice(index, 1);
-            save();
+        async function deleteItem(index) {
+            userData.todos[userData.currentCategory].splice(index, 1);
+            await saveUserData();
             render();
         }
 
         // End day - remove completed
-        function endDay() {
-            const todos = data.todos[data.currentCategory] || [];
+        async function endDay() {
+            const todos = userData.todos[userData.currentCategory] || [];
             const completedCount = todos.filter(t => t.completed).length;
             
             if (completedCount === 0) {
@@ -603,8 +841,8 @@
             }
 
             if (confirm(`Remove ${completedCount} completed task(s)? This cannot be undone.`)) {
-                data.todos[data.currentCategory] = todos.filter(t => !t.completed);
-                save();
+                userData.todos[userData.currentCategory] = todos.filter(t => !t.completed);
+                await saveUserData();
                 render();
             }
         }
@@ -616,8 +854,8 @@
             return div.innerHTML;
         }
 
-        // Initialize
-        load();
+        // Expose saveUserData globally for any updates
+        window.saveUserData = saveUserData;
     </script>
 </body>
 </html>
